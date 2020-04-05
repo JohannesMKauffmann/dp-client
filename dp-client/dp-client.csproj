@@ -53,8 +53,13 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Afzet.cs" />
-    <Compile Include="Data.cs" />
+    <Compile Include="DataFormats\Afzet.cs" />
+    <Compile Include="DataFormats\Brandstofafzet.cs" />
+    <Compile Include="DataFormats\Data.cs" />
+    <Compile Include="DataFormats\Emissie.cs" />
+    <Compile Include="DataFormats\Emissies.cs" />
+    <Compile Include="DataFormats\Pompprijs.cs" />
+    <Compile Include="DataFormats\Pompprijzen.cs" />
     <Compile Include="Handler.cs" />
     <Compile Include="Client.cs">
       <SubType>Form</SubType>

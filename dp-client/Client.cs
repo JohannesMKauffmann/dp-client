@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using dp_client.DataFormats;
 
 namespace dp_client
 {
@@ -21,16 +22,42 @@ namespace dp_client
 			InitializeComponent();
 			handler = new Handler(UsingJSON)
 			{
+				Hostname = "127.0.0.1",
 				PortNumber = "4002"
 			};
 		}
 
 		private async void Client_Load(object sender, EventArgs e)
 		{
-			// set some defaults, like JSON, brandstofafzet.
+			// set default textbox content
+			HostnameTextBox.Text = handler.Hostname;
 			PortNumberTextBox.Text = handler.PortNumber;
-			await QueryAPI();
-			UpdateCharts();
+			await UpdateForm();
+		}
+
+		private async void UpdateURL_Click(object sender, EventArgs e)
+		{
+			handler.Hostname = HostnameTextBox.Text;
+			handler.PortNumber = PortNumberTextBox.Text;
+			await UpdateForm();
+		}
+
+		private void XMLButton_CheckedChanged(object sender, EventArgs e)
+		{
+			UsingJSON = JSONButton.Checked;
+		}
+
+		private async Task UpdateForm()
+		{
+			try
+			{
+				await QueryAPI();
+				UpdateCharts();
+			}
+			catch(InvalidOperationException)
+			{
+				MessageBox.Show("Could not connect to the server. Make sure you are using the correct hostname and port number.");
+			}
 		}
 
 		public async Task QueryAPI()
@@ -38,7 +65,7 @@ namespace dp_client
 			foreach (string Endpoint in Endpoints)
 			{
 				handler.SwitchAcceptHeader(UsingJSON);
-				await Task.Run(() => handler.MakeRequest(Endpoint));
+				await handler.MakeRequest(Endpoint);
 				if (!handler.Validated)
 				{
 					MessageBox.Show("Data has not been validated.");
@@ -46,23 +73,13 @@ namespace dp_client
 			}
 		}
 
-		private async void UpdateURL_Click(object sender, EventArgs e)
-		{
-			handler.PortNumber = PortNumberTextBox.Text;
-			await QueryAPI();
-		}
-
-		private async void XMLButton_CheckedChanged(object sender, EventArgs e)
-		{
-			UsingJSON = JSONButton.Checked;
-			await QueryAPI();
-			UpdateCharts();
-		}
-
 		public void UpdateCharts()
 		{
 			ClearCharts();
 			FillBrandstofChart();
+			FillEmissiesChart();
+			FillPompprijzenChart();
+
 		}
 
 		private void ClearCharts()
@@ -75,7 +92,11 @@ namespace dp_client
 			{
 				series.Points.Clear();
 			}
-			foreach (System.Windows.Forms.DataVisualization.Charting.Series series in BrandstofafzetChart.Series)
+			foreach (System.Windows.Forms.DataVisualization.Charting.Series series in NOxChart.Series)
+			{
+				series.Points.Clear();
+			}
+			foreach (System.Windows.Forms.DataVisualization.Charting.Series series in CO2Chart.Series)
 			{
 				series.Points.Clear();
 			}
@@ -83,12 +104,49 @@ namespace dp_client
 
 		private void FillBrandstofChart()
 		{
-			List<Afzet> afzetList = handler.allData.brandstofafzet;
+			List<Afzet> afzetList = handler.allData.Brandstofafzet.AfzetList;
 			afzetList.ForEach(afzet => {
 				BrandstofafzetChart.Series["Euro 95"].Points.AddXY(afzet.Jaar, afzet.Euro95);
 				BrandstofafzetChart.Series["Diesel"].Points.AddXY(afzet.Jaar, afzet.Diesel);
 				BrandstofafzetChart.Series["LPG"].Points.AddXY(afzet.Jaar, afzet.Lpg);
 			});
 		}
+
+		private void FillEmissiesChart()
+		{
+			List<Emissie> emissiesList = handler.allData.Emissies.EmissieList;
+			emissiesList.ForEach(emissie => {
+				switch(emissie.Bron)
+				{
+					case "wegverkeer":
+						NOxChart.Series["Totaal wegverkeer"].Points.AddXY(emissie.Jaar, emissie.Nox);
+						CO2Chart.Series["Totaal wegverkeer"].Points.AddXY(emissie.Jaar, emissie.Co2);
+						break;
+					case "benzine":
+						NOxChart.Series["Benzine"].Points.AddXY(emissie.Jaar, emissie.Nox);
+						CO2Chart.Series["Benzine"].Points.AddXY(emissie.Jaar, emissie.Co2);
+						break;
+					case "diesel":
+						NOxChart.Series["Diesel"].Points.AddXY(emissie.Jaar, emissie.Nox);
+						CO2Chart.Series["Diesel"].Points.AddXY(emissie.Jaar, emissie.Co2);
+						break;
+					case "lpg":
+						NOxChart.Series["LPG"].Points.AddXY(emissie.Jaar, emissie.Nox);
+						CO2Chart.Series["LPG"].Points.AddXY(emissie.Jaar, emissie.Co2);
+						break;
+				}
+			});
+		}
+
+		private void FillPompprijzenChart()
+		{
+			List<Pompprijs> pompprijsList = handler.allData.Pompprijzen.PompprijsList;
+			pompprijsList.ForEach(pompprijs => {
+				PompprijzenChart.Series["Euro 95"].Points.AddXY(pompprijs.Jaar, pompprijs.Euro95);
+				PompprijzenChart.Series["Diesel"].Points.AddXY(pompprijs.Jaar, pompprijs.Diesel);
+				PompprijzenChart.Series["LPG"].Points.AddXY(pompprijs.Jaar, pompprijs.Lpg);
+			});
+		}
+
 	}
 }

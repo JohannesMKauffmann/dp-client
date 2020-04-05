@@ -1,24 +1,25 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.IO;
 using System.Xml;
 using System.Xml.Linq;
 using System.Xml.Schema;
+using System.Xml.Serialization;
 using System.Threading.Tasks;
 using System.Net.Http;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json.Schema;
+using dp_client.DataFormats;
 
 namespace dp_client
 {
-	class Handler
+	public class Handler
 	{
 
 		private static readonly HttpClient client = new HttpClient();
 
-		private const string BaseURL = "http://localhost:";
+		public string Hostname { get; set; }
 		public string PortNumber { get; set; }
 		public string Accept { get; set; }
 		public string Body { get; set; }
@@ -27,19 +28,19 @@ namespace dp_client
 
 		public Data allData;
 
-		public Handler(Boolean UsingJSON)
+		public Handler(Boolean usingJSON)
 		{
-			SwitchAcceptHeader(UsingJSON);
+			SwitchAcceptHeader(usingJSON);
 			// Add default Accept header
 			client.DefaultRequestHeaders.Add("Accept", Accept);
 			Validated = false;
 			allData = new Data();
 		}
 
-		public void SwitchAcceptHeader(Boolean UsingJSON)
+		public void SwitchAcceptHeader(Boolean usingJSON)
 		{
 			client.DefaultRequestHeaders.Remove("Accept");
-			if (UsingJSON)
+			if (usingJSON)
 			{
 				Accept = "application/json";
 			}
@@ -50,28 +51,38 @@ namespace dp_client
 			client.DefaultRequestHeaders.Add("Accept", Accept);
 		}
 
+		// Get data, validate data using linked schema and deserialize it
 		public async Task MakeRequest(string endpoint)
 		{
-			HttpResponseMessage response = await client.GetAsync(GetURL(endpoint));
-			Body = await response.Content.ReadAsStringAsync();
-			string LinkHeader = response.Headers.GetValues("Link").First();
-			string schemaHREF = GetLinkHeaderHREF(LinkHeader);
-			await GetSchema(schemaHREF);
-			// validate then deserialize data
-			if (Accept.Contains("json"))
+			try
 			{
-				Validated = ValidateJSON();
-				DeserializeJSON(endpoint);
+				HttpResponseMessage response = await client.GetAsync(GetURL(endpoint));
+				response.EnsureSuccessStatusCode();
+				Body = await response.Content.ReadAsStringAsync();
+				string linkHeader = response.Headers.GetValues("Link").First();
+				string schemaHREF = GetLinkHeaderHREF(linkHeader);
+				await GetSchema(schemaHREF);
+				// validate then deserialize data
+				if (Accept.Contains("json"))
+				{
+					Validated = ValidateJSON();
+					DeserializeJSON(endpoint);
+				}
+				else
+				{
+					Validated = ValidateXML();
+					DeserializeXML(endpoint);
+				}
 			}
-			else
+			catch(HttpRequestException hrex)
 			{
-				Validated = ValidateXML();
+				throw new InvalidOperationException();
 			}
 		}
 
 		public string GetURL(string endpoint)
 		{
-			return BaseURL + PortNumber + "/api/" + endpoint;
+			return "http://" + Hostname + ":" + PortNumber + "/api/" + endpoint;
 		}
 
 		public string GetLinkHeaderHREF(string linkHeader)
@@ -121,18 +132,40 @@ namespace dp_client
 			switch(endpoint)
 			{
 				case "brandstofafzet":
-					allData.brandstofafzet = JObject.Parse(Body)[endpoint].ToObject<List<Afzet>>();
+					allData.Brandstofafzet.AfzetList = JObject.Parse(Body)[endpoint].ToObject<List<Afzet>>();
 					break;
 				case "emissies":
+					allData.Emissies.EmissieList = JObject.Parse(Body)[endpoint].ToObject<List<Emissie>>();
 					break;
 				case "pompprijzen":
+					allData.Pompprijzen.PompprijsList = JObject.Parse(Body)[endpoint].ToObject<List<Pompprijs>>();
 					break;
 			}
 		}
 
 		public void DeserializeXML(string endpoint)
 		{
-
+			XmlSerializer serializer;
+			using (var reader = new StringReader(Body))
+			{
+				switch (endpoint)
+				{
+					case "brandstofafzet":
+						serializer = new XmlSerializer(typeof(Brandstofafzet));
+						allData.Brandstofafzet = (Brandstofafzet)serializer.Deserialize(reader);
+						break;
+					case "emissies":
+						serializer = new XmlSerializer(typeof(Emissies));
+						allData.Emissies = (Emissies)serializer.Deserialize(reader);
+						break;
+					case "pompprijzen":
+						serializer = new XmlSerializer(typeof(Pompprijzen));
+						allData.Pompprijzen = (Pompprijzen)serializer.Deserialize(reader);
+						break;
+				}
+			}
 		}
+
+
 	}
 }
