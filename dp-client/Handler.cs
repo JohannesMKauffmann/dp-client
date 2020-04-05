@@ -74,7 +74,7 @@ namespace dp_client
 					DeserializeXML(endpoint);
 				}
 			}
-			catch(HttpRequestException hrex)
+			catch(HttpRequestException)
 			{
 				throw new InvalidOperationException();
 			}
