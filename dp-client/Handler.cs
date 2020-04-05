@@ -18,20 +18,22 @@ namespace dp_client
 
 		private static readonly HttpClient client = new HttpClient();
 
-		public string BaseURL { get; set; }
-		public string Endpoint { get; set; }
+		private const string BaseURL = "http://localhost:";
+		public string PortNumber { get; set; }
 		public string Accept { get; set; }
 		public string Body { get; set; }
 		public string Schema { get; set; }
-		public Boolean validated { get; private set; }
+		public Boolean Validated { get; private set; }
+
+		public Data allData;
 
 		public Handler(Boolean UsingJSON)
 		{
 			SwitchAcceptHeader(UsingJSON);
-			Endpoint = "brandstofafzet";
 			// Add default Accept header
 			client.DefaultRequestHeaders.Add("Accept", Accept);
-			validated = false;
+			Validated = false;
+			allData = new Data();
 		}
 
 		public void SwitchAcceptHeader(Boolean UsingJSON)
@@ -48,56 +50,58 @@ namespace dp_client
 			client.DefaultRequestHeaders.Add("Accept", Accept);
 		}
 
-		public async Task MakeRequest(string Endpoint)
+		public async Task MakeRequest(string endpoint)
 		{
-			HttpResponseMessage response = await client.GetAsync(BaseURL + "/" + Endpoint);
+			HttpResponseMessage response = await client.GetAsync(GetURL(endpoint));
 			Body = await response.Content.ReadAsStringAsync();
 			string LinkHeader = response.Headers.GetValues("Link").First();
 			string schemaHREF = GetLinkHeaderHREF(LinkHeader);
 			await GetSchema(schemaHREF);
+			// validate then deserialize data
 			if (Accept.Contains("json"))
 			{
-				validated = ValidateJSON(Schema);
+				Validated = ValidateJSON();
+				DeserializeJSON(endpoint);
 			}
 			else
 			{
-				validated = ValidateXML(Schema);
+				Validated = ValidateXML();
 			}
 		}
 
-		public string GetURL(string Endpoint)
+		public string GetURL(string endpoint)
 		{
-			return BaseURL + "/" + Endpoint;
+			return BaseURL + PortNumber + "/api/" + endpoint;
 		}
 
-		public string GetLinkHeaderHREF(string LinkHeader)
+		public string GetLinkHeaderHREF(string linkHeader)
 		{
-			int Length;
+			int length;
 			if (Accept.Contains("json"))
 			{
-				Length = LinkHeader.IndexOf(".schema.json") + 10;
+				length = linkHeader.IndexOf(".schema.json") + 10;
 			}
 			else
 			{
-				Length = LinkHeader.IndexOf(".xsd") + 2;
+				length = linkHeader.IndexOf(".xsd") + 2;
 			}
-			return LinkHeader.Substring(2, Length);
+			return linkHeader.Substring(2, length);
 		}
 
-		public async Task GetSchema(string SchemaHREF)
+		public async Task GetSchema(string schemaHREF)
 		{
-			HttpResponseMessage response = await client.GetAsync(GetURL(SchemaHREF));
+			HttpResponseMessage response = await client.GetAsync(GetURL(schemaHREF));
 			Schema = await response.Content.ReadAsStringAsync();
 		}
 
-		public Boolean ValidateJSON(string Schema)
+		public Boolean ValidateJSON()
 		{
 			JSchema ValidationSchema = JSchema.Parse(Schema);
 			JObject JsonToValidate = JObject.Parse(Body);
 			return JsonToValidate.IsValid(ValidationSchema);
 		}
 
-		public Boolean ValidateXML(string SchemaHREF)
+		public Boolean ValidateXML()
 		{
 			// Load schema
 			XmlSchemaSet schemas = new XmlSchemaSet();
@@ -110,6 +114,25 @@ namespace dp_client
 				msg += e.Message + Environment.NewLine;
 			});
 			return msg == "";
+		}
+
+		public void DeserializeJSON(string endpoint)
+		{
+			switch(endpoint)
+			{
+				case "brandstofafzet":
+					allData.brandstofafzet = JObject.Parse(Body)[endpoint].ToObject<List<Afzet>>();
+					break;
+				case "emissies":
+					break;
+				case "pompprijzen":
+					break;
+			}
+		}
+
+		public void DeserializeXML(string endpoint)
+		{
+
 		}
 	}
 }
